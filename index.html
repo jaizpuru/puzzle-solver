@@ -1,0 +1,233 @@
+<link rel="stylesheet" href="main.css">
+<script type="text/javascript" src="jquery.js"></script>
+
+<script type="text/javascript">
+	$(function() {
+		var empty = -1, red = 0, green = 1, yellow = 2, white = 3, blue = 4;
+		var board = [[0,1,2], [3,4,5], [6,7,8]];
+		
+		var piece1 = function(s, v) { 
+			return (v == 0 || v == 4) ? [s[1][1], s[2][1]] :
+				   (v == 1 || v == 5) ? [s[1][1], s[1][2]] : 
+				   (v == 2 || v == 6) ? [s[1][1], s[0][1]] : 
+				   [s[1][1], s[1][0]] ;
+		}
+
+		var piece2 = function(s, v) { 
+			return !(v % 2) ? [s[0][1], s[2][1]] : [s[1][0], s[1][2]] ;
+		}
+		
+		var piece3 = function(s, v) { 
+			return v == 0 ? [s[0][0], s[1][2], s[2][2]] :
+				   v == 1 ? [s[0][2], s[2][0], s[2][1]] : 
+				   v == 2 ? [s[2][2], s[0][0], s[1][0]] : 
+				   v == 3 ? [s[0][1], s[0][2], s[2][0]] :
+				   v == 4 ? [s[0][0], s[2][1], s[2][2]] :
+				   v == 5 ? [s[0][2], s[1][0], s[2][0]] :
+				   v == 6 ? [s[2][2], s[0][0], s[0][1]] :
+				   			[s[2][0], s[0][2], s[1][2]] ;
+		}
+
+		var piece4 = function(s, v) { 
+			return v == 0 ? [s[0][0], s[1][2]] :
+				   v == 1 ? [s[0][2], s[2][1]] : 
+				   v == 2 ? [s[1][0], s[2][2]] : 
+				   v == 3 ? [s[0][1], s[2][0]] :
+				   v == 4 ? [s[0][0], s[2][1]] :
+				   v == 5 ? [s[0][2], s[1][0]] :
+				   v == 6 ? [s[0][1], s[2][2]] :
+				   			[s[1][2], s[2][0]] ;
+		}
+
+		var slot1 = [[yellow, empty, blue], [red, green, red], [white, blue, yellow]];
+		var slot2 = [[green, empty, blue], [empty, red, yellow], [blue, white, green]];
+		var slot3 = [[white, yellow, red], [green, empty, green], [blue, empty, white]];
+		var slot4 = [[empty, empty, empty], [empty, white, blue], [green, yellow, red]];
+		
+		var pieces = [piece1, piece2, piece3, piece4];
+		var slots = [slot1, slot2, slot3, slot4];
+		
+		var perms = [
+			[0, 2, 3, 1], [0, 1, 2, 3], [0, 2, 1, 3], [0, 3, 1, 2], [0, 3, 2, 1], [0, 1, 3, 2],
+			[1, 0, 2, 3], [1, 2, 0, 3], [1, 3, 0, 2], [1, 3, 2, 0], [1, 0, 3, 2], [1, 2, 3, 0],
+			[2, 0, 1, 3], [2, 1, 0, 3], [2, 3, 0, 1], [2, 3, 1, 0], [2, 0, 1, 2], [2, 1, 3, 0],
+			[3, 0, 1, 2], [3, 0, 2, 1], [3, 1, 0, 2], [3, 1, 2, 0], [3, 2, 0, 1], [3, 2, 1, 0]
+		];
+
+		function solve(request) {
+			for(var perm = 0; perm < perms.length; perm++) {
+				var solution = searchSolution(request, perms[perm]);
+				if (solution != null) {
+					return solution;
+				}
+			}
+		}
+		
+		/**
+		 * Request:  [0, 0, 5, 0, 0]
+		 * Perm: [0]
+		 */
+		function searchSolution(request, perm) {
+			var partialResult = {sum: [0, 0, 0, 0, 0], explain: []};
+			var solution = searchSolutionStep(request, perm, 0, partialResult);
+			if (solution != null) {
+				return {explain: solution.explain, perm: perm};
+			}
+			
+			return null;
+		}
+
+		function searchSolutionStep(request, perm, positionedPieces, partialResult) {
+			var currentPiece = pieces[positionedPieces];
+			var slot = slots[perm[positionedPieces]];
+			
+			for (var variant = 0; variant < 8; variant++) {
+				var pieceOnSlot = currentPiece(slot, variant);
+				var solutionIncrement = pieceIncrement(pieceOnSlot);
+
+				var explain = partialResult.explain;
+				explain[positionedPieces] = variant;
+				var updatedPartialResult = {sum: augmentSolution(partialResult.sum, solutionIncrement), explain: explain};
+
+				var validPartialSolution = isValidSolution(updatedPartialResult.sum, request, positionedPieces+1 < slots.length);
+				if (validPartialSolution && positionedPieces+1 == slots.length) {
+					return updatedPartialResult;
+				} else if (validPartialSolution) {
+					var augmentedSolution = searchSolutionStep(request, perm, positionedPieces+1, updatedPartialResult);
+					if (augmentedSolution != null) {
+						return augmentedSolution;
+					}
+				}
+			}
+			
+			return null;
+		} 
+
+		function pieceIncrement(pieceOnSlot) {
+			var solution = [0,0,0,0,0];
+			for (var i = 0; i < pieceOnSlot.length; i++) {
+				solution[pieceOnSlot[i]]++;
+			}
+
+			return solution;
+		}
+
+		function isValidSolution(partialResult, request, isPartial) {
+			for (var color = 0; color < 5; color++) {
+				if (isPartial ? (partialResult[color] > request[color]) : (partialResult[color] != request[color])) {
+					return false;
+				}
+			}
+			
+			return true;
+		}
+		
+		function augmentSolution(a1, a2) {
+			return [a1[0] + a2[0], a1[1] + a2[1], a1[2] + a2[2], a1[3] + a2[3], a1[4] + a2[4]];
+		}
+		
+		function explain(solution) {
+			if (solution == null) {
+				$('#nosol').show();
+			} else {
+				$('#nosol').hide();
+			}
+
+			if (solution) {
+				for (var i = 0; i < pieces.length; i++) {
+					var position = solution.perm[i];
+					var pieceRes = pieces[i](board, solution.explain[i]);
+
+					// graphic
+					var $slot = $('#board section').eq(position);
+					var $slotSquares = $slot.find('div');
+					$slotSquares.addClass('marked');
+					for (var j = 0; j < pieceRes.length; j++) {
+						$slotSquares.eq(pieceRes[j]).removeClass('marked');
+					}
+				}
+			}
+		}
+
+		/*red = 0, green = 1, yellow = 2, white = 3, blue = 4;*/
+	
+		$('#buton').click(function(e) {
+			e.preventDefault();
+			var request = [
+					parseInt($('input#redQty').val()),
+					parseInt($('input#greenQty').val()),
+					parseInt($('input#yellowQty').val()),
+					parseInt($('input#whiteQty').val()),
+					parseInt($('input#blueQty').val())
+				];
+			var solution = solve(request);
+			explain(solution);
+			
+		});
+	});
+</script>
+
+	<form method="get">
+		<h2>Pick the desired board configuration</h2>
+		<div style="width: 150px">
+			<span style="float: right;">Red: <input id="redQty" value="0" size="3" /></span><br />
+			<span style="float: right;">Green: <input id="greenQty" value="0" size="3" /></span><br />
+			<span style="float: right;">Blue: <input id="blueQty" value="0" size="3" /></span><br />
+			<span style="float: right;">Yellow: <input id="yellowQty" value="0" size="3" /></span><br />
+			<span style="float: right;">White: <input id="whiteQty" value="0" size="3" /></span><br />
+		</div>
+		<br />
+		<button id="buton">SolveIt!</button>
+		<div id="nosol" style="display: none;"><br />There's no solution for that. I dare you</div>
+	</form>
+	<br />
+	<br />
+    <div id="board">
+        <section class="square">
+            <div class="slot yellow"></div>
+            <div class="slot empty"></div>
+            <div class="slot blue"></div>
+            <div class="slot red"></div>
+            <div class="slot green"></div>
+            <div class="slot red"></div>
+            <div class="slot white"></div>
+            <div class="slot blue"></div>
+            <div class="slot yellow"></div>
+        </section>
+
+        <section class="square">
+            <div class="slot green"></div>
+            <div class="slot empty"></div>
+            <div class="slot blue"></div>
+            <div class="slot empty"></div>
+            <div class="slot red"></div>
+            <div class="slot yellow"></div>
+            <div class="slot blue"></div>
+            <div class="slot white"></div>
+            <div class="slot green"></div>
+        </section>
+
+        <section class="square">
+            <div class="slot white"></div>
+            <div class="slot yellow"></div>
+            <div class="slot red"></div>
+            <div class="slot green"></div>
+            <div class="slot empty"></div>
+            <div class="slot green"></div>
+            <div class="slot blue"></div>
+            <div class="slot empty"></div>
+            <div class="slot white"></div>
+        </section>
+
+        <section class="square">
+            <div class="slot empty"></div>
+            <div class="slot empty"></div>
+            <div class="slot empty"></div>
+            <div class="slot empty"></div>
+            <div class="slot white"></div>
+            <div class="slot blue"></div>
+            <div class="slot green"></div>
+            <div class="slot yellow"></div>
+            <div class="slot red"></div>
+        </section>
+    </div>
